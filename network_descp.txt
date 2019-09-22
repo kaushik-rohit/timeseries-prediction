@@ -1,0 +1,84 @@
+***********************************
+***********************************
+Single Step Prediction
+***********************************
+***********************************
+
+----------------------------------------------------------------------------
+Model1: Artificial Neural Network(ANN)
+Parameters:
+	Type: Sequential
+	Input layer: Dense(32), activation='Relu'
+	Input Shape: (window_size, 1)
+	Intermediate Layer: Dense(16), Relu
+	Output Layer: Dense(1)
+	loss function= mean_squared_error
+	optimizer='adam'
+
+Justification for the above used model:
+
+
+
+
+
+
+----------------------------------------------------------------------------
+
+Model2: Long Short Term Memory(LSTM)
+Parameters:
+	Type: Sequential
+	Input layer: LSTM(256), activation='Relu'
+	Input Shape: (window_size, 1)
+	Intermediate Layer: Dense(16), Relu
+	Output Layer: Dense(1)
+	loss function= mean_squared_error
+	optimizer='adam'
+
+
+
+
+----------------------------------------------------------------------------
+
+
+
+----------------------------------------------------------------------------
+
+Model3: Convolutional Neural Network(CNN)
+Parameters:
+	Type: Sequential
+	Input layer: Dense(32), activation='Relu'
+	Input Shape: (window_size, 1)
+	Intermediate Layer: Dense(16), Relu
+	Output Layer: Dense(1)
+	loss function= mean_squared_error
+	optimizer='adam'
+
+
+
+
+----------------------------------------------------------------------------
+
+
+
+----------------------------------------------------------------------------
+
+Model4: Gated Recurrent Unit(GRU)
+Parameters:
+	Type: Sequential
+	Input layer: Dense(32), activation='Relu'
+	Input Shape: (window_size, 1)
+	Intermediate Layer: Dense(16), Relu
+	Output Layer: Dense(1)
+	loss function= mean_squared_error
+	optimizer='adam'
+
+
+
+
+----------------------------------------------------------------------------
+
+*************************************
+*************************************
+Multi Step Prediction
+*************************************
+*************************************
