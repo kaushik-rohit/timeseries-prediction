@@ -15,6 +15,7 @@ def get_data():
             time.sleep(300)
             data = get_history(symbol=sym, start=date(2002, 1, 1), end=date(2019, 1, 15))
         print('data fetched!!!')
+        print(data)
         data.to_csv(path_or_buf='../data/{}.csv'.format(sym))
 
 
