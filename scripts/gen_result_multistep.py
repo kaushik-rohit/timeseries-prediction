@@ -1,121 +1,125 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 import sys
-from copy import deepcopy
 
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error as mse
-
-from nsepy import get_history
-from datetime import date
-
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Dropout
-import keras.backend as K
 from keras.callbacks import EarlyStopping
-from keras.optimizers import Adam
-from keras.models import load_model
 from keras.layers import LSTM, GRU, Conv1D, MaxPooling1D
 from keras.utils.vis_utils import plot_model
 from operator import add
 import json
 
-# INFY','BHARTIARTL', 'ULTRACEMCO', 'CIPLA', 'ACC',
-symbols = ['HCLTECH', 'JSWSTEEL', 'MARUTI', 'AXISBANK', 'INFY', 'HDFC']
-window_size = [3, 5, 7, 9, 11, 13, 15]
+symbols = ['ACC', 'HCLTECH', 'JSWSTEEL', 'MARUTI', 'AXISBANK', 'INFY', 'HDFC', 'INFY', 'BHARTIARTL', 'ULTRACEMCO',
+           'CIPLA']
+
+# (x, y) here x indicates the input size and y indicates the prediction size
+# (30, 7) means we predict next 7 days stocks using previous 30 days prices
+window_size = [(30, 7), (30, 14), (60, 7), (60, 14)]
 
 
 def adj_r2_score(r2, n, k):
     return 1 - ((1 - r2) * ((n - 1) / (n - k - 1)))
 
 
-def window_transform(series, window_size):
-    # containers for input/output pairs
+def window_transform(series, input_size, output_size):
     X = []
     y = []
+
     slen = len(series)
-    for i in range(slen - window_size):
-        X.append(series[i:i + window_size])
+    n_windows = slen - (input_size + output_size) + 1
 
-    for i in range(window_size, slen):
-        y.append(series[i])
+    for i in range(n_windows):
+        X.append(series[i:i + input_size])
+        y.append(series[i+input_size: i+input_size+output_size])
 
-    # reshape each
     X = np.array(X)
     y = np.array(y)
-
+    X = X.reshape(X.shape[0], X.shape[1])
+    y = y.reshape(y.shape[0], y.shape[1])
     return X, y
 
 
-def make_ann_model(window_size):
+def test_window_transform(series, input_size, output_size):
+    X = []
+    y = []
+
+    slen = len(series)
+
+    j = input_size
+    while (j+output_size) < slen:
+        X.append(series[j - input_size:j])
+        y.append(series[j:j+output_size])
+        j = j + output_size
+
+    X = np.array(X)
+    y = np.array(y)
+    X = X.reshape(X.shape[0], X.shape[1])
+    y = y.reshape(y.shape[0], y.shape[1])
+    return X, y
+
+
+def make_ann_model(input_size, output_size):
     model = Sequential()
-    model.add(Dense(32, activation='relu', input_shape=(window_size, 1)))
+    model.add(Dense(32, activation='relu', input_shape=(input_size,)))
     model.add(Dense(16, activation='relu'))
-    model.add(Flatten())
-    model.add(Dense(1))
+    model.add(Dense(output_size, activation='linear'))
     model.compile(loss='mean_squared_error', optimizer='adam')
     return model
 
 
-def make_lstm_model(window_size):
+def make_cnn_model(input_size, output_size):
+    model = Sequential()
+    model.add(Conv1D(filters=64, kernel_size=5, strides=1, activation='relu', input_shape=(input_size, 1)))
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Flatten())
+    model.add(Dense(output_size, activation='linear'))
+
+    model.compile(loss='mean_squared_error', optimizer='adam')
+
+    return model
+
+
+def make_lstm_model(input_size, output_size):
     model_lstm = Sequential()
-    model_lstm.add(LSTM(256, input_shape=(window_size, 1), activation='relu', kernel_initializer='lecun_uniform',
+    model_lstm.add(LSTM(256, input_shape=(input_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                         return_sequences=True))
     model_lstm.add(Dropout(0.2))
-    model_lstm.add(LSTM(128, input_shape=(window_size, 1), activation='relu', kernel_initializer='lecun_uniform',
+    model_lstm.add(LSTM(128, input_shape=(input_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                         return_sequences=False))
     model_lstm.add(Dropout(0.2))
-    model_lstm.add(Dense(1, activation='linear'))
+    model_lstm.add(Dense(output_size, activation='linear'))
     model_lstm.compile(loss='mean_squared_error', optimizer='adam')
 
     return model_lstm
 
 
-def make_cnn_model(window_size):
+def make_gru_model(input_size, output_size):
     model = Sequential()
-    model.add(Conv1D(filters=64, kernel_size=2, activation='relu', input_shape=(window_size, 1)))
-    model.add(Conv1D(filters=32, kernel_size=1, activation='relu'))
-    model.add(MaxPooling1D(pool_size=2))
-    # model.add(Dense(32,activation='relu'))
-    model.add(Flatten())
-    model.add(Dense(1))
-
-    model.compile(loss='mean_squared_error', optimizer='adam')
-
-    return model
-
-
-def make_gru_model(window_size):
-    model = Sequential()
-    model.add(GRU(256, input_shape=(window_size, 1), activation='relu', kernel_initializer='lecun_uniform',
+    model.add(GRU(256, input_shape=(input_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                   return_sequences=True))
     model.add(Dropout(0.2))
     model.add(GRU(128, input_shape=(window_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                   return_sequences=False))
     model.add(Dropout(0.2))
-    model.add(Dense(1, activation='linear'))
+    model.add(Dense(output_size, activation='linear'))
     model.compile(loss='mean_squared_error', optimizer='adam')
 
     return model
 
 
-def test_model(model, X_init, Y_test, window_size):
-    Y_test_pred = []
-    X = deepcopy(X_init)
-    for i in range(len(Y_test)):
-        y_pred = model.predict(np.reshape(X, (1, window_size, 1)))
-        Y_test_pred.append(y_pred[0][0])
-        X = np.delete(X, 0)
-        X = np.append(X, y_pred)
+def test_model(model, X_test, y_test):
+    y_pred = model.predict(X_test)
 
-    flat_list = [item for sublist in Y_test for item in sublist]
-    print(flat_list)
-    print(Y_test_pred)
-    error = mse(flat_list, Y_test_pred)
-    return error, Y_test_pred
+    true_ = [item for sublist in y_test for item in sublist]
+    pred_ = [item for sublist in y_pred for item in sublist]
+
+    error = mse(true_, pred_)
+
+    return error, pred_
 
 
 def plot_all_model():
@@ -166,7 +170,7 @@ if __name__ == '__main__':
             lstm = []
             cnn = []
 
-            for win_sz in window_size:
+            for in_size, out_size in window_size:
                 ann_result = []
                 gru_result = []
                 lstm_result = []
@@ -177,47 +181,59 @@ if __name__ == '__main__':
                 pred_CNN = []
                 for i in range(5):
                     # ''''''''ANN'''''''''''''''''''
-                    X_train, y_train = window_transform(train_sc, win_sz)
-
-                    model = make_ann_model(win_sz)
+                    X_train, y_train = window_transform(train_sc, in_size, out_size)
+                    print('X train: ', X_train.shape)
+                    print('y train: ', y_train.shape)
+                    X_test, y_test = test_window_transform(test_sc, in_size, out_size)
+                    print('X test: ', X_test.shape)
+                    print('y test: ', y_test.shape)
+                    model = make_ann_model(in_size, out_size)
                     early_stop = EarlyStopping(monitor='loss', patience=2, verbose=1)
                     history = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1, callbacks=[early_stop],
                                         shuffle=False)
 
-                    error, pred_ann = test_model(model, X_train[-1], test_sc, win_sz)
+                    error, pred_ann = test_model(model, X_test, y_test)
 
                     ann_result.append(error)
                     # ''''''''ANN''''''''''''''''''''
 
                     # ''''''''CNN''''''''''''''''''''
-                    model = make_cnn_model(win_sz)
-                    early_stop = EarlyStopping(monitor='loss', patience=5, verbose=1)
+                    X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+                    y_train = y_train.reshape(y_train.shape[0], y_train.shape[1])
+                    print('X train: ', X_train.shape)
+                    print('y train: ', y_train.shape)
+                    X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+                    y_test = y_test.reshape(y_test.shape[0], y_test.shape[1])
+                    print('X train: ', X_train.shape)
+                    print('y train: ', y_train.shape)
+                    model = make_cnn_model(in_size, out_size)
+                    print(model.summary())
+                    early_stop = EarlyStopping(monitor='loss', patience=3, verbose=1)
                     history_model_cnn = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1, shuffle=False,
                                                   callbacks=[early_stop])
 
-                    error, pred_cnn = test_model(model, X_train[-1], test_sc, win_sz)
+                    error, pred_cnn = test_model(model, X_test, y_test)
                     cnn_result.append(error)
                     # ''''''''CNN''''''''''''''''''''
 
-                    X_tr_t = X_train.reshape(X_train.shape[0], win_sz, 1)
-
                     # ''''''''''LSTM''''''''''''''''''
-                    model = make_lstm_model(win_sz)
-                    early_stop = EarlyStopping(monitor='loss', patience=5, verbose=1)
-                    history_model_lstm = model.fit(X_tr_t, y_train, epochs=200, batch_size=32, verbose=1, shuffle=False,
-                                                   callbacks=[early_stop])
+                    model = make_lstm_model(in_size, out_size)
+                    print(model.summary())
+                    early_stop = EarlyStopping(monitor='loss', patience=3, verbose=1)
+                    history_model_lstm = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1,
+                                                   shuffle=False, callbacks=[early_stop])
 
-                    error, pred_lstm = test_model(model, X_train[-1], test_sc, win_sz)
+                    error, pred_lstm = test_model(model, X_test, y_test)
                     lstm_result.append(error)
                     # "''''''''LSTM'''''''''''''''''''
 
                     # ''''''''GRU'''''''''''''''''''''
-                    model = make_gru_model(win_sz)
-                    early_stop = EarlyStopping(monitor='loss', patience=5, verbose=1)
-                    history_model_gru = model.fit(X_tr_t, y_train, epochs=200, batch_size=32, verbose=1, shuffle=False,
+                    model = make_gru_model(in_size, out_size)
+                    early_stop = EarlyStopping(monitor='loss', patience=3, verbose=1)
+                    history_model_gru = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1, shuffle=False,
                                                   callbacks=[early_stop])
 
-                    error, pred_gru = test_model(model, X_train[-1], test_sc, win_sz)
+                    error, pred_gru = test_model(model, X_test, y_test)
                     gru_result.append(error)
                     # ''''''''GRU'''''''''''''''''''''
 
@@ -226,10 +242,10 @@ if __name__ == '__main__':
                     pred_LSTM.append(pred_lstm)
                     pred_GRU.append(pred_gru)
                 # update optimal window size param
-                ann.append([win_sz, min(ann_result), np.mean(ann_result), np.std(ann_result)])
-                gru.append([win_sz, min(gru_result), np.mean(gru_result), np.std(gru_result)])
-                lstm.append([win_sz, min(lstm_result), np.mean(lstm_result), np.std(lstm_result)])
-                cnn.append([win_sz, min(cnn_result), np.mean(cnn_result), np.std(cnn_result)])
+                ann.append([in_size, out_size, min(ann_result), np.mean(ann_result), np.std(ann_result)])
+                gru.append([in_size, out_size, min(gru_result), np.mean(gru_result), np.std(gru_result)])
+                lstm.append([in_size, out_size, min(lstm_result), np.mean(lstm_result), np.std(lstm_result)])
+                cnn.append([in_size, out_size, min(cnn_result), np.mean(cnn_result), np.std(cnn_result)])
 
                 plot_ann = [0] * len(pred_ANN[0])
                 for pred in pred_ANN:
@@ -260,16 +276,16 @@ if __name__ == '__main__':
                     plot_cnn[i] = plot_cnn[i] / 5
 
                 # save prediction plots
-                plt.plot(test_sc, label='True Values', color='black')
-                plt.plot(plot_ann, label='ANN Prediction', color='red')
-                plt.plot(plot_cnn, label='CNN Prediction', color='blue')
-                plt.plot(plot_lstm, label='LSTM Prediction', color='green')
-                plt.plot(plot_gru, label='GRU Prediction', color='yellow')
+                plt.plot(test_sc, '-', label='True Values', color='#1b9e77')
+                plt.plot(plot_ann, label='ANN Prediction', color='#d95f02')
+                plt.plot(plot_cnn, ':', label='CNN Prediction', color='#7570b3')
+                plt.plot(plot_lstm, label='LSTM Prediction', color='#e7298a')
+                plt.plot(plot_gru, label='GRU Prediction', color='#66a61e')
                 plt.title("Prediction")
                 plt.xlabel('Time')
                 plt.ylabel('Normalized Stock Prices')
                 plt.legend()
-                plt.savefig('./plots/' + sym + ' ' + ' window_sz ' + str(win_sz))
+                plt.savefig('../plots/' + sym + ' ' + ' in_sz ' + str(in_size) + ' out_sz ' + str(out_size))
                 plt.clf()
 
             json_descriptor['ann'] = ann
@@ -280,4 +296,3 @@ if __name__ == '__main__':
 
             with open('data.json', 'w') as f:
                 json.dump(result, f)
-        # json.dumps(result)
