@@ -5,6 +5,7 @@ import sys
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error as mse
+import keras
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Dropout
 from keras.callbacks import EarlyStopping
@@ -12,8 +13,8 @@ from keras.layers import LSTM, GRU, Conv1D, MaxPooling1D
 from keras.utils.vis_utils import plot_model
 from operator import add
 import json
-
-symbols = ['ACC', 'HCLTECH', 'JSWSTEEL', 'MARUTI', 'AXISBANK', 'INFY', 'HDFC', 'INFY', 'BHARTIARTL', 'ULTRACEMCO',
+#'ACC', 'HCLTECH', 'JSWSTEEL', 'MARUTI','AXISBANK', 'INFY', 
+symbols = [ 'HDFC', 'INFY', 'BHARTIARTL', 'ULTRACEMCO',
            'CIPLA']
 
 # (x, y) here x indicates the input size and y indicates the prediction size
@@ -92,7 +93,8 @@ def make_lstm_model(input_size, output_size):
                         return_sequences=False))
     model_lstm.add(Dropout(0.2))
     model_lstm.add(Dense(output_size, activation='linear'))
-    model_lstm.compile(loss='mean_squared_error', optimizer='adam')
+    opt = keras.optimizers.Adam(clipnorm=1.0)
+    model_lstm.compile(loss='mean_squared_error', optimizer=opt)
 
     return model_lstm
 
@@ -102,11 +104,12 @@ def make_gru_model(input_size, output_size):
     model.add(GRU(256, input_shape=(input_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                   return_sequences=True))
     model.add(Dropout(0.2))
-    model.add(GRU(128, input_shape=(window_size, 1), activation='relu', kernel_initializer='lecun_uniform',
+    model.add(GRU(128, input_shape=(input_size, 1), activation='relu', kernel_initializer='lecun_uniform',
                   return_sequences=False))
     model.add(Dropout(0.2))
     model.add(Dense(output_size, activation='linear'))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    opt = keras.optimizers.Adam(clipnorm=1.0)
+    model.compile(loss='mean_squared_error', optimizer=opt)
 
     return model
 
@@ -277,7 +280,7 @@ if __name__ == '__main__':
 
                 # save prediction plots
                 plt.plot(test_sc, '-', label='True Values', color='#1b9e77')
-                plt.plot(plot_ann, label='ANN Prediction', color='#d95f02')
+                plt.plot(plot_ann, label='MLP Prediction', color='#d95f02')
                 plt.plot(plot_cnn, ':', label='CNN Prediction', color='#7570b3')
                 plt.plot(plot_lstm, label='LSTM Prediction', color='#e7298a')
                 plt.plot(plot_gru, label='GRU Prediction', color='#66a61e')
