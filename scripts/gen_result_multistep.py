@@ -13,9 +13,9 @@ from keras.layers import LSTM, GRU, Conv1D, MaxPooling1D
 from keras.utils.vis_utils import plot_model
 from operator import add
 import json
-#'ACC', 'HCLTECH', 'JSWSTEEL', 'MARUTI','AXISBANK', 'INFY', 
-symbols = [ 'HDFC', 'INFY', 'BHARTIARTL', 'ULTRACEMCO',
-           'CIPLA']
+import itertools
+
+symbols = ['ACC', 'HCLTECH', 'JSWSTEEL', 'AXISBANK', 'INFY', 'HDFC', 'INFY', 'BHARTIARTL', 'ULTRACEMCO', 'CIPLA', 'MARUTI']
 
 # (x, y) here x indicates the input size and y indicates the prediction size
 # (30, 7) means we predict next 7 days stocks using previous 30 days prices
@@ -188,6 +188,7 @@ if __name__ == '__main__':
                     print('X train: ', X_train.shape)
                     print('y train: ', y_train.shape)
                     X_test, y_test = test_window_transform(test_sc, in_size, out_size)
+                    flat_y_test = [item for sublist in y_test for item in sublist]
                     print('X test: ', X_test.shape)
                     print('y test: ', y_test.shape)
                     model = make_ann_model(in_size, out_size)
@@ -279,7 +280,7 @@ if __name__ == '__main__':
                     plot_cnn[i] = plot_cnn[i] / 5
 
                 # save prediction plots
-                plt.plot(test_sc, '-', label='True Values', color='#1b9e77')
+                plt.plot(flat_y_test, '-', label='True Values', color='#1b9e77')
                 plt.plot(plot_ann, label='MLP Prediction', color='#d95f02')
                 plt.plot(plot_cnn, ':', label='CNN Prediction', color='#7570b3')
                 plt.plot(plot_lstm, label='LSTM Prediction', color='#e7298a')
@@ -290,6 +291,12 @@ if __name__ == '__main__':
                 plt.legend()
                 plt.savefig('../plots/' + sym + ' ' + ' in_sz ' + str(in_size) + ' out_sz ' + str(out_size))
                 plt.clf()
+                
+                print(y_test)
+                print(plot_ann)
+                # save prediction plots
+                df = pd.DataFrame(zip(flat_y_test, plot_ann, plot_cnn, plot_lstm, plot_gru), columns = ['actual', 'ann', 'cnn', 'lstm', 'gru'])
+                df.to_csv(path_or_buf='./predictions_{}_{}_{}.csv'.format(sym, in_size, out_size))
 
             json_descriptor['ann'] = ann
             json_descriptor['lstm'] = lstm
